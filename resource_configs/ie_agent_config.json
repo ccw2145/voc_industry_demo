@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Generated Schema",
+  "type": "object",
+  "properties": {
+    "review_metadata": {
+      "description": "Contains high-level metadata about the review being analyzed, including duration of stay and overall sentiment assessment.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "stay_length": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The duration of the customer's stay expressed as a string combining a number and time unit (e.g., '3 nights', '2 days')."
+            },
+            "overall_sentiment": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "postive",
+                    "negative",
+                    "very_positive",
+                    "very_negative",
+                    "neutral"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The aggregated sentiment classification for the entire review, expressed as a categorical value such as 'positive', 'neutral', 'negative', 'very_positive', 'very_negative'."
+            }
+          },
+          "required": [
+            "stay_length",
+            "overall_sentiment"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "aspect_terms": {
+      "description": "An array of objects representing specific aspects or features mentioned in the review, each with associated sentiment analysis and supporting text examples.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "aspect": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "check_in_out",
+                      "parking",
+                      "booking_reservation",
+                      "staff_friendliness",
+                      "loyalty_experience",
+                      "safety_security",
+                      "cleanliness",
+                      "room_quality",
+                      "bathroom_quality",
+                      "bed_sleep_quality",
+                      "temperature_hvac",
+                      "wifi_connectivity",
+                      "breakfast_quality",
+                      "fnb_other",
+                      "maintenance",
+                      "amenities_fitness",
+                      "pool_spa",
+                      "noise_ambience",
+                      "location_convenience",
+                      "value_price"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A standardized category identifier representing a specific feature or service aspect being evaluated. \n\nArrival & Departure\ncheck_in_out — Front desk or kiosk experience, wait times, early/late checkout, key card issuance\nparking — Parking availability, ease of access, pricing, safety, EV charging availability\nbooking_reservation — Booking via website, app, or OTA; overbooking; handling of special requests\nStaff & Service\nstaff_friendliness — Courtesy, professionalism, helpfulness, attentiveness, recognition of guests\nloyalty_experience — Loyalty program recognition, upgrades, perks, point redemption or handling\nsafety_security — Personal safety, theft, security staff, door locks, billing security, fraud concerns\nIn-Room Experience\ncleanliness — Room and common area cleanliness, housekeeping quality and thoroughness\nroom_quality — Room size, layout, furnishings, lighting, outlets, in-room technology (excluding cleanliness)\nbathroom_quality — Bathroom fixtures, water temperature/pressure, shower/tub, toiletries, plumbing reliability\nbed_sleep_quality — Mattress, pillows, linens, bed comfort, blackout curtains, ability to sleep well\ntemperature_hvac — Heating, cooling, ventilation, thermostat accuracy, AC/heater noise\nwifi_connectivity — Internet speed, reliability, login process, free vs paid access\nFood & Beverage\nbreakfast_quality — Breakfast options, variety, freshness, hours, buffet line experience\nfnb_other — On-site restaurant, bar, café, or room service quality (excluding breakfast)\nFacilities & Amenities\nmaintenance — Broken or out-of-order equipment, outages, elevator/kiosk/key card malfunctions\namenities_fitness — Gym equipment availability, condition, cleanliness, and operating hours\npool_spa — Pool, hot tub, sauna, or spa cleanliness, temperature, availability, or closures\nEnvironment & Location\nnoise_ambience — Noise from hallways, elevators, neighbors, or street; overall atmosphere and vibe\nlocation_convenience — Proximity to transit, airport, attractions, or restaurants; neighborhood quality\nValue & Loyalty\nvalue_price — Price fairness, hidden fees, value for money compared to expectations\n\n"
+              },
+              "sentiment": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "neutral",
+                      "very_positive",
+                      "very_negative"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The sentiment classification assigned to this specific aspect, using categorical values such as 'positive', 'neutral', 'negative', 'very_positive', 'very_negative'."
+              },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "An array of direct text excerpts from the original review that support the sentiment classification for this aspect."
+              },
+              "opinion_terms": {
+                "description": "array of short polarity-bearing words/phrases tied to this aspect (e.g., “spotless,” “friendly,” “overpriced,” “noisy AC”); use verbatim spans when possible",
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "aspect",
+              "sentiment",
+              "opinion_terms",
+              "evidence"
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entities": {
+      "description": "Contains named entities extracted from the review text, organized by entity type such as locations, people, attractions, or other relevant categories.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "locations": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific locations mentioned in the review, could be local bars, restaurants, tourist attractions, landmarks, or any other names locations."
+            },
+            "people": {
+              "description": "Name of staff member or person mentioned in the review text.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "people",
+            "locations"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "review_metadata",
+    "aspect_terms",
+    "entities"
+  ]
+}

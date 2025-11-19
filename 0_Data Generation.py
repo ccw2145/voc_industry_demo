@@ -5,9 +5,19 @@
 
 # COMMAND ----------
 
+dbutils.widgets.text("catalog", "main")
+dbutils.widgets.text("schema", "voc_demo")
+dbutils.widgets.text("review_table", "raw_reviews")
+
+
+# COMMAND ----------
+
 # Set the default catalog and schema to Unity Catalog
-spark.sql("USE CATALOG lakehouse_inn_catalog")
-spark.sql("USE SCHEMA voc")
+catalog = dbutils.widgets.get("catalog")
+schema = dbutils.widgets.get("schema")
+
+spark.sql(f"USE CATALOG {catalog}")
+spark.sql(f"USE SCHEMA {schema}")
 
 # COMMAND ----------
 
@@ -159,7 +169,7 @@ spark.sql("USE SCHEMA voc")
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC create or replace table `lakehouse_inn_catalog`.`voc`.`hotel_locations` as
+# MAGIC create or replace table hotel_locations as
 # MAGIC select 
 # MAGIC   *,
 # MAGIC   case
@@ -186,12 +196,12 @@ spark.sql("USE SCHEMA voc")
 # MAGIC     ) then 'West'
 # MAGIC     else null
 # MAGIC   end as region
-# MAGIC from `lakehouse_inn_catalog`.`voc`.`hotel_locations`;
+# MAGIC from hotel_locations;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC ALTER TABLE `lakehouse_inn_catalog`.`voc`.`hotel_locations` SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
+# MAGIC ALTER TABLE hotel_locations SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
 
 # COMMAND ----------
 
@@ -200,26 +210,11 @@ spark.sql("USE SCHEMA voc")
 
 # COMMAND ----------
 
-hl = spark.table("hotel_locations")
 from pyspark.sql import functions as F
 
-NUM_REVIEWS = 5000
-df = (
-    spark.range(NUM_REVIEWS)
-    .join(F.broadcast(hl.sample(withReplacement=True, fraction=1.0)), how="cross")
-    .limit(NUM_REVIEWS)
-).toPandas()
-
-# COMMAND ----------
-
-hl.select('location').distinct().count()
-
-# COMMAND ----------
-
-from pyspark.sql import functions as F
-
-NUM_REVIEWS = 5000
+NUM_REVIEWS = 1000
 MODEL = "databricks-meta-llama-3-3-70b-instruct"
+table_name = dbutils.widgets.get("table_name")
 
 hl = spark.table("hotel_locations")
 
@@ -232,7 +227,7 @@ df = (
 # Random weighted fields
 df = (
     df
-    .withColumn("review_id", F.lpad(F.col("id").cast("string"), 6, "0"))
+    .withColumn("review_uid",F.expr("uuid()"))
     .withColumn(
         "channel",
         F.when(F.rand() < 0.25, "Google")
@@ -255,6 +250,7 @@ df = (
     .withColumnRenamed("loc", "location")
     .withColumnRenamed("lng", "longitude")
     .withColumnRenamed("lat", "latitude")
+    .drop('id')
 )
 
 # Add LLM-generated review text
@@ -273,71 +269,59 @@ df = df.withColumn(
 )
 
 # Save
-df.write.mode("overwrite").saveAsTable("raw_reviews")
+df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.{table_name}")
 display(df.limit(10))
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Create the hotel reviews table
-# MAGIC CREATE OR REPLACE TABLE raw_reviews (
-# MAGIC     review_id VARCHAR(50) PRIMARY KEY,
-# MAGIC     location VARCHAR(255),
-# MAGIC     channel VARCHAR(50) CHECK (channel IN ('Google','TripAdvisor','Booking.com','Expedia','Hotels.com','Yelp')),
-# MAGIC     -- review_text STRING,
-# MAGIC     star_rating INTEGER CHECK (star_rating BETWEEN 1 AND 5),
-# MAGIC     review_date DATE,
-# MAGIC     longitude DECIMAL(10, 7) CHECK (longitude BETWEEN -180 AND 180),
-# MAGIC     latitude DECIMAL(10, 7) CHECK (latitude BETWEEN -90 AND 90)
-# MAGIC );
-# MAGIC
+df.toPandas()
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Generate 5000 hotel reviews
-# MAGIC INSERT INTO raw_reviews
-# MAGIC SELECT 
-# MAGIC     CONCAT(LPAD(CAST(id AS STRING), 6, '0')) as review_id,
-# MAGIC     
-# MAGIC     -- Select random location from hotel_locations
-# MAGIC     hl.location,
-# MAGIC     
-# MAGIC     -- Random review channel with weighted distribution
-# MAGIC     CASE 
-# MAGIC         WHEN rand() < 0.25 THEN 'Google'
-# MAGIC         WHEN rand() < 0.45 THEN 'TripAdvisor'
-# MAGIC         WHEN rand() < 0.65 THEN 'Booking.com'
-# MAGIC         WHEN rand() < 0.80 THEN 'Expedia'
-# MAGIC         WHEN rand() < 0.90 THEN 'Hotels.com'
-# MAGIC         ELSE 'Yelp'
-# MAGIC     END as channel,
-# MAGIC     
-# MAGIC     -- Star rating with realistic distribution (more 4-5 stars)
-# MAGIC     CASE 
-# MAGIC         WHEN rand() < 0.35 THEN 5
-# MAGIC         WHEN rand() < 0.60 THEN 4
-# MAGIC         WHEN rand() < 0.75 THEN 3
-# MAGIC         WHEN rand() < 0.95 THEN 2
-# MAGIC         ELSE 1
-# MAGIC     END as star_rating,
-# MAGIC     
-# MAGIC     -- Random date within last 6 months (180 days)
-# MAGIC     DATE_SUB(CURRENT_DATE(), CAST(rand() * 180 AS INT)) as review_date,
-# MAGIC     
-# MAGIC     -- Use coordinates from hotel_locations
-# MAGIC     hl.longitude,
-# MAGIC     hl.latitude
-# MAGIC
-# MAGIC FROM (SELECT id FROM RANGE(5000)) r
-# MAGIC JOIN (
-# MAGIC     SELECT 
-# MAGIC         location, 
-# MAGIC         longitude, 
-# MAGIC         latitude,
-# MAGIC         ROW_NUMBER() OVER (ORDER BY rand()) as rn
-# MAGIC     FROM hotel_locations
-# MAGIC ) hl ON MOD(r.id, (SELECT COUNT(*) FROM hotel_locations)) = MOD(hl.rn - 1, (SELECT COUNT(*) FROM hotel_locations));
+# %sql
+# -- Generate 5000 hotel reviews
+# INSERT INTO raw_reviews
+# SELECT 
+#     CONCAT(LPAD(CAST(id AS STRING), 6, '0')) as review_id,
+    
+#     -- Select random location from hotel_locations
+#     hl.location,
+    
+#     -- Random review channel with weighted distribution
+#     CASE 
+#         WHEN rand() < 0.25 THEN 'Google'
+#         WHEN rand() < 0.45 THEN 'TripAdvisor'
+#         WHEN rand() < 0.65 THEN 'Booking.com'
+#         WHEN rand() < 0.80 THEN 'Expedia'
+#         WHEN rand() < 0.90 THEN 'Hotels.com'
+#         ELSE 'Yelp'
+#     END as channel,
+    
+#     -- Star rating with realistic distribution (more 4-5 stars)
+#     CASE 
+#         WHEN rand() < 0.35 THEN 5
+#         WHEN rand() < 0.60 THEN 4
+#         WHEN rand() < 0.75 THEN 3
+#         WHEN rand() < 0.95 THEN 2
+#         ELSE 1
+#     END as star_rating,
+    
+#     -- Random date within last 6 months (180 days)
+#     DATE_SUB(CURRENT_DATE(), CAST(rand() * 180 AS INT)) as review_date,
+    
+#     -- Use coordinates from hotel_locations
+#     hl.longitude,
+#     hl.latitude
+
+# FROM (SELECT id FROM RANGE(5000)) r
+# JOIN (
+#     SELECT 
+#         location, 
+#         longitude, 
+#         latitude,
+#         ROW_NUMBER() OVER (ORDER BY rand()) as rn
+#     FROM hotel_locations
+# ) hl ON MOD(r.id, (SELECT COUNT(*) FROM hotel_locations)) = MOD(hl.rn - 1, (SELECT COUNT(*) FROM hotel_locations));
 
 # COMMAND ----------
 
@@ -346,18 +330,18 @@ display(df.limit(10))
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Generate the AI review text in a temp view
-# MAGIC CREATE OR REPLACE TEMP VIEW tmp_reviews AS
-# MAGIC SELECT
-# MAGIC   review_id,
-# MAGIC   ai_query(
-# MAGIC     "databricks-meta-llama-3-3-70b-instruct",
-# MAGIC     'Generate a realistic hotel review (max 200 words) for a customer who stayed at ' || location ||
-# MAGIC     ', rated their experience ' || star_rating || ' stars via ' || channel ||
-# MAGIC     ' on ' || CAST(review_date AS STRING) || '.'
-# MAGIC   ) AS review_text
-# MAGIC FROM raw_reviews;
+# %sql
+# -- Generate the AI review text in a temp view
+# CREATE OR REPLACE TEMP VIEW tmp_reviews AS
+# SELECT
+#   review_id,
+#   ai_query(
+#     "databricks-meta-llama-3-3-70b-instruct",
+#     'Generate a realistic hotel review (max 200 words) for a customer who stayed at ' || location ||
+#     ', rated their experience ' || star_rating || ' stars via ' || channel ||
+#     ' on ' || CAST(review_date AS STRING) || '.'
+#   ) AS review_text
+# FROM raw_reviews;
 
 # COMMAND ----------
 
@@ -528,10 +512,6 @@ plans_df = (
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # Drop the table if it exists in Unity Catalog
 spark.sql(
     """
@@ -625,77 +605,6 @@ examples = """
             }
         }
 """
-
-# COMMAND ----------
-
-# %sql
-# CREATE OR REPLACE TABLE dan_morris.lakehouse_inn_voc.aspect_runbook AS
-# WITH aspects AS (
-#   SELECT map_from_arrays(
-#     array(
-#       'check_in_out',
-#       'parking',
-#       'booking_reservation',
-#       'staff_friendliness',
-#       'loyalty_experience',
-#       'safety_security',
-#       'cleanliness',
-#       'room_quality',
-#       'bathroom_quality',
-#       'bed_sleep_quality',
-#       'temperature_hvac',
-#       'wifi_connectivity',
-#       'breakfast_quality',
-#       'fnb_other',
-#       'maintenance',
-#       'amenities_fitness',
-#       'pool_spa',
-#       'noise_ambience',
-#       'location_convenience',
-#       'value_price'
-#     ),
-#     array(
-#       'Front desk or kiosk experience, wait times, early/late checkout, key card issuance',
-#       'Parking availability, ease of access, pricing, safety, EV charging availability',
-#       'Booking via website, app, or OTA; overbooking; handling of special requests',
-#       'Courtesy, professionalism, helpfulness, attentiveness, recognition of guests',
-#       'Loyalty program recognition, upgrades, perks, point redemption or handling',
-#       'Personal safety, theft, security staff, door locks, billing security, fraud concerns',
-#       'Room and common area cleanliness, housekeeping quality and thoroughness',
-#       'Room size, layout, furnishings, lighting, outlets, in-room technology (excluding cleanliness)',
-#       'Bathroom fixtures, water temperature/pressure, shower/tub, toiletries, plumbing reliability',
-#       'Mattress, pillows, linens, bed comfort, blackout curtains, ability to sleep well',
-#       'Heating, cooling, ventilation, thermostat accuracy, AC/heater noise',
-#       'Internet speed, reliability, login process, free vs paid access',
-#       'Breakfast options, variety, freshness, hours, buffet line experience',
-#       'On-site restaurant, bar, café, or room service quality (excluding breakfast)',
-#       'Broken or out-of-order equipment, outages, elevator/kiosk/key card malfunctions',
-#       'Gym equipment availability, condition, cleanliness, and operating hours',
-#       'Pool, hot tub, sauna, or spa cleanliness, temperature, availability, or closures',
-#       'Noise from hallways, elevators, neighbors, or street; overall atmosphere and vibe',
-#       'Proximity to transit, airport, attractions, or restaurants; neighborhood quality',
-#       'Price fairness, hidden fees, value for money compared to expectations'
-#     )
-#   ) AS aspect_desc
-# )
-# SELECT ai_query(
-#   "databricks-claude-sonnet-4",
-#   concat(
-#     'You are generating remediation plans for hotel operations.\n',
-#     'Use the following aspects and descriptions (JSON map of aspect_name -> description):\n',
-#     to_json(aspect_desc),
-#     '\n\nReturn a SINGLE JSON object where each key is EXACTLY one aspect name (snake_case) and each value is an object with keys:\n',
-#     '  - action: string (concise, imperative)\n',
-#     '  - action_items: array of EXACTLY 5 concise, actionable bullet points\n',
-#     '  - expected_impact: string (include a % and timeframe, e.g., \"Reduce X by 40% within 3 weeks\")\n',
-#     '  - timeline: short string (e.g., \"2 weeks\")\n',
-#     '  - cost_estimate: one of [Low, Medium, High, Low-Medium, Medium-High]\n',
-#     '  - difficulty: one of [Low, Medium, High]\n',
-#     'Be specific and realistic. Tailor content to each aspect description. OUTPUT ONLY JSON with NO commentary.'
-#   ),
-#   named_struct('response_format', 'json')
-# ) AS remediation_plans_json
-# FROM aspects;
 
 # COMMAND ----------
 

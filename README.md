@@ -1,13 +1,15 @@
-%md
 # Demo Instructions
 
 This folder contains a demo workflow for analyzing customer review data.
 
 ## How to Run
 
-1. **Run the /FEVM Script**
+1. Clone the repo: https://github.com/ccw2145/voc_industry_demo.git
+
+2. **Run the /FEVM Script**
    - Before starting the notebooks, execute the `/FEVM/Updated Infra Builder (RUN ALL)` script to set up the required environment and dependencies.
-2. **Execute Notebooks in Order**
+
+3. **Execute Notebooks in Order**
    - Start with **Notebook 0_Data_Generation** to generate synthetic reviews data and proceed sequentially through **Notebook 5**.
    - Each notebook builds on the previous one, so please follow the order for a smooth demo experience.
 
